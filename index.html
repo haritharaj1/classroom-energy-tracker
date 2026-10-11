@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Classroom Energy Waste Tracker</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+--bg:#f6f8f5;--card:#fff;--text:#1d2a1f;--muted:#5d6b60;--accent:#2e7d32;--bar:#43a047;--border:#d9e2d9}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#121a14;--card:#1b261d;--text:#e6efe7;--muted:#9bb09e;--accent:#66bb6a;--bar:#66bb6a;--border:#2c3b2f}}
+:root[data-theme="dark"]{--bg:#121a14;--card:#1b261d;--text:#e6efe7;--muted:#9bb09e;--accent:#66bb6a;--bar:#66bb6a;--border:#2c3b2f}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;line-height:1.4}
+main{max-width:720px;margin:0 auto;padding:16px}
+h1{font-size:1.4rem;margin:8px 0 2px}
+.sub{color:var(--muted);margin:0 0 16px;font-size:.9rem}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px}
+h2{font-size:1rem;margin:0 0 10px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+label{font-size:.8rem;color:var(--muted);display:block;margin-bottom:3px}
+input,select{width:100%;padding:9px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:1rem}
+button{background:var(--accent);color:#fff;border:0;border-radius:8px;padding:10px 14px;font-size:1rem;cursor:pointer;margin-top:12px;width:100%}
+button.ghost{background:transparent;color:var(--muted);border:1px solid var(--border);width:auto;padding:6px 10px;font-size:.8rem;margin:0}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;text-align:center}
+.stat b{display:block;font-size:1.4rem;color:var(--accent)}
+.stat span{font-size:.75rem;color:var(--muted)}
+.row{display:flex;align-items:center;gap:8px;margin:6px 0;font-size:.9rem}
+.row .name{width:80px;flex-shrink:0}
+.track{flex:1;background:var(--bg);border-radius:6px;height:18px;overflow:hidden}
+.fill{background:var(--bar);height:100%}
+.row .val{width:64px;text-align:right;color:var(--muted);font-size:.8rem}
+.log{font-size:.85rem;border-top:1px solid var(--border);padding:8px 0;display:flex;justify-content:space-between;gap:8px}
+.tip{background:var(--bg);border-left:4px solid var(--accent);padding:10px;border-radius:6px;font-size:.9rem}
+.muted{color:var(--muted)}
+</style>
+</head>
+<body>
+<main>
+  <h1>Classroom Energy Waste Tracker</h1>
+  <p class="sub">Log lights, fans and other devices left on in empty rooms. See how much electricity is wasted.</p>
+
+  <div class="card">
+    <h2>Report a wastage</h2>
+    <div class="grid">
+      <div><label>Room</label><input id="room" placeholder="e.g. CR-204" /></div>
+      <div><label>Device</label>
+        <select id="dev">
+          <option value="20">Light (20 W)</option>
+          <option value="75">Fan (75 W)</option>
+          <option value="1500">Air conditioner (1500 W)</option>
+          <option value="250">Projector (250 W)</option>
+          <option value="150">Computer (150 W)</option>
+        </select></div>
+      <div><label>Number of devices</label><input id="qty" type="number" min="1" value="4" /></div>
+      <div><label>Hours left on</label><input id="hrs" type="number" min="0.5" step="0.5" value="2" /></div>
+    </div>
+    <button id="add">Add report</button>
+  </div>
+
+  <div class="card">
+    <h2>Summary</h2>
+    <div class="stats">
+      <div class="stat"><b id="kwh">0</b><span>kWh wasted</span></div>
+      <div class="stat"><b id="co2">0</b><span>kg CO₂</span></div>
+      <div class="stat"><b id="cost">0</b><span>₹ lost</span></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Wastage by room</h2>
+    <div id="chart"><p class="muted">No reports yet.</p></div>
+    <div class="tip" id="tip" style="margin-top:10px;display:none"></div>
+  </div>
+
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <h2 style="margin:0">Recent reports</h2>
+      <button class="ghost" id="clear">Clear all</button>
+    </div>
+    <div id="log"><p class="muted">Nothing logged.</p></div>
+  </div>
+  <p class="muted" style="font-size:.75rem">Assumes 0.82 kg CO₂ and ₹8 per kWh (approximate).</p>
+</main>
+<script>
+var KEY="energy_waste_logs", logs=[];
+try{logs=JSON.parse(localStorage.getItem(KEY)||"[]")}catch(e){logs=[]}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(logs))}catch(e){}}
+function kwh(l){return l.watts*l.qty*l.hrs/1000}
+function render(){
+  var total=0,by={};
+  logs.forEach(function(l){var k=kwh(l);total+=k;by[l.room]=(by[l.room]||0)+k});
+  document.getElementById("kwh").textContent=total.toFixed(1);
+  document.getElementById("co2").textContent=(total*0.82).toFixed(1);
+  document.getElementById("cost").textContent=Math.round(total*8);
+  var rooms=Object.keys(by).sort(function(a,b){return by[b]-by[a]});
+  var chart=document.getElementById("chart"),tip=document.getElementById("tip");
+  if(!rooms.length){chart.innerHTML='<p class="muted">No reports yet.</p>';tip.style.display="none"}
+  else{
+    var max=by[rooms[0]];
+    chart.innerHTML=rooms.map(function(r){
+      return '<div class="row"><span class="name">'+esc(r)+'</span><div class="track"><div class="fill" style="width:'+(by[r]/max*100)+'%"></div></div><span class="val">'+by[r].toFixed(1)+' kWh</span></div>'}).join("");
+    tip.style.display="block";
+    tip.textContent="Highest wastage: "+rooms[0]+". Add an 'Switch off before leaving' notice and assign a student monitor for this room.";
+  }
+  var lg=document.getElementById("log");
+  lg.innerHTML=logs.length?logs.slice().reverse().slice(0,8).map(function(l){
+    return '<div class="log"><span>'+esc(l.room)+' · '+l.qty+' × '+esc(l.dev)+' · '+l.hrs+' h</span><span>'+kwh(l).toFixed(2)+' kWh</span></div>'}).join(""):'<p class="muted">Nothing logged.</p>';
+}
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
+document.getElementById("add").onclick=function(){
+  var room=document.getElementById("room").value.trim(),sel=document.getElementById("dev");
+  var qty=+document.getElementById("qty").value,hrs=+document.getElementById("hrs").value;
+  if(!room||!(qty>0)||!(hrs>0)){alert("Enter room, number of devices and hours.");return}
+  logs.push({room:room.toUpperCase(),watts:+sel.value,dev:sel.options[sel.selectedIndex].text.split(" (")[0],qty:qty,hrs:hrs});
+  save();render();document.getElementById("room").value="";
+};
+document.getElementById("clear").onclick=function(){if(confirm("Delete all reports?")){logs=[];save();render()}};
+render();
+</script>
+</body>
+</html>
